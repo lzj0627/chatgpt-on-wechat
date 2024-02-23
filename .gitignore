@@ -22,6 +22,10 @@ plugins/**/
 !plugins/finish
 !plugins/godcmd
 !plugins/tool
+!plugins/tools
+!plugins/Apilot
+!plugins/Apilot/**/
+!plugins/vision
 !plugins/banwords
 !plugins/banwords/**/
 plugins/banwords/__pycache__
