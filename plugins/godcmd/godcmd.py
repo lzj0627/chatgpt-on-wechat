@@ -15,6 +15,8 @@ from bridge.reply import Reply, ReplyType
 from common import const
 from config import conf, load_config, global_config
 from plugins import *
+# from plugins.ddg import DDGSearch, DDGSearchAPIError
+from plugins.tools import Tools, DDGSearchAPIError
 
 # 定义指令集
 COMMANDS = {
@@ -32,21 +34,25 @@ COMMANDS = {
         "args": ["口令"],
         "desc": "管理员认证",
     },
+    "all_model": {
+        "alias": ["all_model", "所有模型"],
+        "desc": "查看支持的所有模型",
+    },
     "model": {
-        "alias": ["model", "模型"],
+        "alias": ["model", "全局模型"],
         "desc": "查看和设置全局模型",
     },
     "set_openai_api_key": {
-        "alias": ["set_openai_api_key"],
+        "alias": ["set_openai_api_key", "使用私有APIKEY"],
         "args": ["api_key"],
         "desc": "设置你的OpenAI私有api_key",
     },
     "reset_openai_api_key": {
-        "alias": ["reset_openai_api_key"],
+        "alias": ["reset_openai_api_key", "重置APIKEY"],
         "desc": "重置为默认的api_key",
     },
     "set_gpt_model": {
-        "alias": ["set_gpt_model"],
+        "alias": ["set_gpt_model", "使用模型"],
         "desc": "设置你的私有模型",
     },
     "reset_gpt_model": {
@@ -54,7 +60,7 @@ COMMANDS = {
         "desc": "重置你的私有模型",
     },
     "gpt_model": {
-        "alias": ["gpt_model"],
+        "alias": ["gpt_model", "当前模型"],
         "desc": "查询你使用的模型",
     },
     "id": {
@@ -131,6 +137,14 @@ ADMIN_COMMANDS = {
         "alias": ["debug", "调试模式", "DEBUG"],
         "desc": "开启机器调试日志",
     },
+    "enable_tools": {
+        "alias": ["enable_network", "开启工具"],
+        "desc": "开启工具"
+    },
+    "disable_tools": {
+        "alias": ["disable_network", "关闭工具"],
+        "desc": "关闭工具"
+    }
 }
 
 
@@ -262,6 +276,10 @@ class Godcmd(Plugin):
                                 break
                         if not ok:
                             result = "插件不存在或未启用"
+                elif cmd == 'all_model':
+                    result = '当前支持的模型：'
+                    result += '，'.join(const.MODEL_LIST)
+                    ok, result = True, result
                 elif cmd == "model":
                     if not isadmin and not self.is_admin_in_group(e_context["context"]):
                         ok, result = False, "需要管理员权限执行"
@@ -418,6 +436,18 @@ class Godcmd(Plugin):
                                 ok, result = False, "请提供插件名"
                             else:
                                 ok, result = PluginManager().update_plugin(args[0])
+                        elif cmd == "enable_tools":
+                            conf()['enable_tools'] = True
+                            bot.sessions.clear_session(session_id)
+                            # bot.ddg_search = DDGSearch(conf().get('ddg_search_api'))
+                            bot.tools = Tools()
+                            reply = Reply(ReplyType.INFO, "已开启工具")
+                        elif cmd == "disable_tools":
+                            conf()['enable_tools'] = False
+                            bot.sessions.clear_session(session_id)
+                            if hasattr(bot, 'tools'):
+                                delattr(bot, 'tools')
+                            reply = Reply(ReplyType.INFO, "已关闭工具")
                         logger.debug("[Godcmd] admin command: %s by %s" % (cmd, user))
                 else:
                     ok, result = False, "需要管理员权限才能执行该指令"

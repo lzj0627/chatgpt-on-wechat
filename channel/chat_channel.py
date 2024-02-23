@@ -11,6 +11,8 @@ from bridge.reply import *
 from channel.channel import Channel
 from common.dequeue import Dequeue
 from common import memory
+from common.log import logger
+from config import conf
 from plugins import *
 
 try:
@@ -148,7 +150,7 @@ class ChatChannel(Channel):
                     return None
             content = content.strip()
             img_match_prefix = check_prefix(content, conf().get("image_create_prefix"))
-            if img_match_prefix:
+            if img_match_prefix and not conf().get('enable_tools', False):
                 content = content.replace(img_match_prefix, "", 1)
                 context.type = ContextType.IMAGE_CREATE
             else:
@@ -221,10 +223,13 @@ class ChatChannel(Channel):
                     "path": context.content,
                     "msg": context.get("msg")
                 }
+                reply = super().build_reply_content(context.content, context)
             elif context.type == ContextType.SHARING:  # 分享信息，当前无默认逻辑
                 pass
             elif context.type == ContextType.FUNCTION or context.type == ContextType.FILE:  # 文件消息及函数调用等，当前无默认逻辑
-                pass
+                reply = super().build_reply_content(context.content, context)
+            elif context.type == ContextType.VIDEO:  # 视频消息
+                reply = super().build_reply_content(context.content, context
             else:
                 logger.warning("[WX] unknown context type: {}".format(context.type))
                 return
@@ -258,6 +263,8 @@ class ChatChannel(Channel):
                     else:
                         reply_text = conf().get("single_chat_reply_prefix", "") + reply_text + conf().get("single_chat_reply_suffix", "")
                     reply.content = reply_text
+                elif reply.type == ReplyType.IMAGE_AND_TEXT:
+                    reply.content = reply.content
                 elif reply.type == ReplyType.ERROR or reply.type == ReplyType.INFO:
                     reply.content = "[" + str(reply.type) + "]\n" + reply.content
                 elif reply.type == ReplyType.IMAGE_URL or reply.type == ReplyType.VOICE or reply.type == ReplyType.IMAGE or reply.type == ReplyType.FILE or reply.type == ReplyType.VIDEO or reply.type == ReplyType.VIDEO_URL:

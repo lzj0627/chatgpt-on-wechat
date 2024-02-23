@@ -1,11 +1,11 @@
 # encoding:utf-8
 
 import time
-
+import base64
 import openai
 import openai.error
 import requests
-
+import io
 from bot.bot import Bot
 from bot.chatgpt.chat_gpt_session import ChatGPTSession
 from bot.openai.open_ai_image import OpenAIImage
@@ -15,6 +15,10 @@ from bridge.reply import Reply, ReplyType
 from common.log import logger
 from common.token_bucket import TokenBucket
 from config import conf, load_config
+import json
+# from plugins.ddg import DDGSearch, DDGSearchAPIError
+from plugins.tools import Tools, DDGSearchAPIError
+
 
 
 # OpenAI对话模型API (可用)
@@ -30,12 +34,13 @@ class ChatGPTBot(Bot, OpenAIImage):
             openai.proxy = proxy
         if conf().get("rate_limit_chatgpt"):
             self.tb4chatgpt = TokenBucket(conf().get("rate_limit_chatgpt", 20))
-
+        if conf().get('enable_tools'):
+            self.tools = Tools()
         self.sessions = SessionManager(ChatGPTSession, model=conf().get("model") or "gpt-3.5-turbo")
         self.args = {
             "model": conf().get("model") or "gpt-3.5-turbo",  # 对话模型的名称
             "temperature": conf().get("temperature", 0.9),  # 值在[0,1]之间，越大表示回复越具有不确定性
-            # "max_tokens":4096,  # 回复最大的字符数
+            # "max_tokens": 4096,  # 回复最大的字符数
             "top_p": conf().get("top_p", 1),
             "frequency_penalty": conf().get("frequency_penalty", 0.0),  # [-2,2]之间，该值越大则更倾向于产生不同的内容
             "presence_penalty": conf().get("presence_penalty", 0.0),  # [-2,2]之间，该值越大则更倾向于产生不同的内容
@@ -44,10 +49,10 @@ class ChatGPTBot(Bot, OpenAIImage):
         }
 
     def reply(self, query, context=None):
+        model = context.get('gpt_model') or conf().get("model") or "gpt-3.5-turbo"
         # acquire reply content
         if context.type == ContextType.TEXT:
             logger.info("[CHATGPT] query={}".format(query))
-
             session_id = context["session_id"]
             reply = None
             clear_memory_commands = conf().get("clear_memory_commands", ["#清除记忆"])
@@ -60,6 +65,20 @@ class ChatGPTBot(Bot, OpenAIImage):
             elif query == "#更新配置":
                 load_config()
                 reply = Reply(ReplyType.INFO, "配置已更新")
+            # elif query == "#开启联网":
+            elif query == "#开启工具":
+                conf()['enable_tools'] = True
+                self.sessions.clear_session(session_id)
+                self.tools = Tools()
+                # self.ddg_search = DDGSearch(conf().get('ddg_search_api'))
+                reply = Reply(ReplyType.INFO, "已开启工具")
+            # elif query == "#关闭联网":
+            elif query == "#关闭工具":
+                conf()['enable_tools'] = False
+                self.sessions.clear_session(session_id)
+                if hasattr(self, 'tools'):
+                    delattr(self, 'tools')
+                reply = Reply(ReplyType.INFO, "已关闭工具")
             if reply:
                 return reply
             session = self.sessions.session_query(query, session_id)
@@ -87,13 +106,76 @@ class ChatGPTBot(Bot, OpenAIImage):
             if reply_content["completion_tokens"] == 0 and len(reply_content["content"]) > 0:
                 reply = Reply(ReplyType.ERROR, reply_content["content"])
             elif reply_content["completion_tokens"] > 0:
+                if isinstance(reply_content["content"], dict):
+                    new_content = reply_content["content"]
+                    reply_content["content"] = new_content.get('content')
+                    self.sessions.session_reply(reply_content["content"], session_id, reply_content["total_tokens"])
+                    reply = Reply(ReplyType.IMAGE_AND_TEXT, new_content)
+                else:
+                    self.sessions.session_reply(reply_content["content"], session_id, reply_content["total_tokens"])
+                    reply = Reply(ReplyType.TEXT, reply_content["content"])
+            else:
+                reply = Reply(ReplyType.ERROR, reply_content["content"])
+                logger.debug("[CHATGPT] reply {} used 0 tokens.".format(reply_content))
+            return reply
+        elif context.type == ContextType.IMAGE and model == 'gpt-4-vision-preview':
+            '''
+            {
+            "type": "text",
+            "text": "What’s in this image? Please answer me in Chinese."
+            },
+            {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{base64_image}"
+            }
+            }
+            '''
+            # reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
+            session_id = context["session_id"]
+            context.get("msg").prepare()
+            file_path = context.content
+            image_storage = open(file_path, 'rb')
+            image_storage.seek(0)
+            base64_image = base64.b64encode(image_storage.read()).decode('utf-8')
+            query = [
+                {
+                "type": "text",
+                "text": "What’s in this image? Please answer me in Chinese."
+                },
+                {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{base64_image}"
+                }
+                }
+            ]
+            session = self.sessions.session_query(query, session_id)
+            logger.debug("[CHATGPT] session query={}".format(session.messages))
+            
+            api_key = context.get("openai_api_key")
+            new_args = None
+            new_args = self.args.copy()
+            new_args["model"] = model
+            new_args["max_tokens"] = 4096
+            reply_content = self.reply_text(session, api_key, args=new_args)
+            logger.debug(
+                "[CHATGPT] new_query={}, session_id={}, reply_cont={}, completion_tokens={}".format(
+                    session.messages,
+                    session_id,
+                    reply_content["content"],
+                    reply_content["completion_tokens"],
+                )
+            )
+            if reply_content["completion_tokens"] == 0 and len(reply_content["content"]) > 0:
+                reply = Reply(ReplyType.ERROR, reply_content["content"])
+            elif reply_content["completion_tokens"] > 0:
                 self.sessions.session_reply(reply_content["content"], session_id, reply_content["total_tokens"])
                 reply = Reply(ReplyType.TEXT, reply_content["content"])
             else:
                 reply = Reply(ReplyType.ERROR, reply_content["content"])
                 logger.debug("[CHATGPT] reply {} used 0 tokens.".format(reply_content))
             return reply
-
         elif context.type == ContextType.IMAGE_CREATE:
             ok, retstring = self.create_img(query, 0)
             reply = None
@@ -103,7 +185,13 @@ class ChatGPTBot(Bot, OpenAIImage):
                 reply = Reply(ReplyType.ERROR, retstring)
             return reply
         else:
-            reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
+            if context.type in [ContextType.IMAGE, ContextType.FILE, ContextType.VIDEO]:
+                if context.get("isgroup", False):
+                    return
+                else:
+                    reply = Reply(ReplyType.ERROR, "请切换模型处理{}类型的消息".format(context.type))
+            else:
+                reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
             return reply
 
     def reply_text(self, session: ChatGPTSession, api_key=None, args=None, retry_count=0) -> dict:
@@ -120,7 +208,12 @@ class ChatGPTBot(Bot, OpenAIImage):
             # if api_key == None, the default openai.api_key will be used
             if args is None:
                 args = self.args
-            response = openai.ChatCompletion.create(api_key=api_key, messages=session.messages, **args)
+            # if hasattr(self, 'ddg_search'):
+            if hasattr(self, 'tools'):
+                logger.debug("[CHATGPT] reply from {}".format('DDG Search'))
+                response = self.tools.run_conversation(api_key, session.messages, **args)
+            else:
+                response = openai.ChatCompletion.create(api_key=api_key, messages=session.messages, **args)
             # logger.debug("[CHATGPT] response={}".format(response))
             # logger.info("[ChatGPT] reply={}, total_tokens={}".format(response.choices[0]['message']['content'], response["usage"]["total_tokens"]))
             return {
@@ -151,6 +244,10 @@ class ChatGPTBot(Bot, OpenAIImage):
                 result["content"] = "我连接不到你的网络"
                 if need_retry:
                     time.sleep(5)
+            elif isinstance(e, DDGSearchAPIError):
+                logger.warn("[CHATGPT] DDGSearchAPIError: {}".format(e))
+                need_retry = False
+                result["content"] = str(e)
             else:
                 logger.exception("[CHATGPT] Exception: {}".format(e))
                 need_retry = False

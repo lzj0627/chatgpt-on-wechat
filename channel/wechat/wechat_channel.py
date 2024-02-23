@@ -26,7 +26,7 @@ from lib import itchat
 from lib.itchat.content import *
 
 
-@itchat.msg_register([TEXT, VOICE, PICTURE, NOTE, ATTACHMENT, SHARING])
+@itchat.msg_register([TEXT, VOICE, VIDEO, PICTURE, NOTE, ATTACHMENT, SHARING])
 def handler_single_msg(msg):
     try:
         cmsg = WechatMessage(msg, False)
@@ -37,7 +37,7 @@ def handler_single_msg(msg):
     return None
 
 
-@itchat.msg_register([TEXT, VOICE, PICTURE, NOTE, ATTACHMENT, SHARING], isGroupChat=True)
+@itchat.msg_register([TEXT, VOICE, VIDEO, PICTURE, NOTE, ATTACHMENT, SHARING], isGroupChat=True)
 def handler_group_msg(msg):
     try:
         cmsg = WechatMessage(msg, True)
@@ -257,6 +257,20 @@ class WechatChannel(ChatChannel):
             video_storage.seek(0)
             itchat.send_video(video_storage, toUserName=receiver)
             logger.info("[WX] sendVideo url={}, receiver={}".format(video_url, receiver))
+        elif reply.type == ReplyType.IMAGE_AND_TEXT:
+            res_dict = reply.content
+            text_content = res_dict.get('content')
+            img_url = res_dict.get('img_url')
+            pic_res = requests.get(img_url, stream=True)
+            image_storage = io.BytesIO()
+            size = 0
+            for block in pic_res.iter_content(1024):
+                size += len(block)
+                image_storage.write(block)
+            logger.info(f"[WX] download image success, size={size}, img_url={img_url}")
+            image_storage.seek(0)
+            itchat.send_image(image_storage, toUserName=receiver)
+            itchat.send(text_content, toUserName=receiver)
 
 def _send_login_success():
     try:
