@@ -59,12 +59,12 @@ tool_list = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "prompt": {
+                    "draw": {
                         "type": "string",
                         "description": "用户输入的生成图片的需求，如：一只可爱的兔子。并且你作为一个绘画助手,如果用户的需求很简单，展开想象，让这段提示词丰富起来",
                     }
                 },
-                "required": ["prompt"],
+                "required": ["draw"],
             },
         }},
         {"type": "function",
@@ -146,11 +146,11 @@ class Tools:
         data = response.json()["data"]
         return json.dumps(data)
 
-    def draw_image(self, prompt):
+    def draw_image(self, draw):
         model = conf().get("text_to_image") or "dall-e-2"
         size = conf().get("image_create_size", "256x256")
         response = openai.Image.create(
-                prompt=prompt,  # 图片描述
+                prompt=draw,  # 图片描述
                 n=1,  # 每次生成图片的数量
                 model=model,
                 size=size  # 图片大小,可选有 256x256, 512x512, 1024x1024
@@ -159,17 +159,22 @@ class Tools:
     
     def answer_to_img(self, q='', img_url=None):
         messages = [
-                {
-                "type": "text",
-                "text": q
-                },
-                {
-                "type": "image_url",
-                "image_url": {
-                    "url": img_url
-                }
-                }
-            ]
+            {
+                "role": "user",
+                "content": [
+                    {
+                    "type": "text",
+                    "text": q
+                    },
+                    {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": img_url
+                    }
+                    }
+                ]
+            }
+        ]
         new_args = self.args.copy()
         new_args['model'] = 'gpt-4-vision-preview'
         try:
@@ -184,7 +189,6 @@ class Tools:
         if args:
             self.args.update(args)
         response = openai.ChatCompletion.create(
-            api_key=api_key,
             messages=messages,
             tools=tool_list,
             tool_choice="auto",
@@ -194,16 +198,16 @@ class Tools:
 
         if not response_message.get("tool_calls"):
             return response
+        response_message = json.loads(json.dumps(response_message))
         messages.append(response_message)
         img_url = None
-        for tool_info in response_message.tool_calls:
+        for tool_info in response_message.get('tool_calls'):
             call_id = tool_info['id']
             func_obj = tool_info["function"]
             func_name = func_obj["name"]
             print(f'调用Tools => {func_name}')
             function_to_call = self.available_functions[func_name]
             function_args = json.loads(func_obj["arguments"])
-            print(f'函数调用的参数{function_args}')
             function_response = function_to_call(**function_args)
             messages.append(
                 {
@@ -219,7 +223,6 @@ class Tools:
                 if image_text_reply not in messages:
                     messages.append(image_text_reply)
         second_response = openai.ChatCompletion.create(
-            api_key=api_key,
             messages=messages,
             tools=tool_list,
             **args
