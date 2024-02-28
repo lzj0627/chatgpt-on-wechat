@@ -229,7 +229,7 @@ class ChatChannel(Channel):
             elif context.type == ContextType.FUNCTION or context.type == ContextType.FILE:  # 文件消息及函数调用等，当前无默认逻辑
                 reply = super().build_reply_content(context.content, context)
             elif context.type == ContextType.VIDEO:  # 视频消息
-                reply = super().build_reply_content(context.content, context
+                reply = super().build_reply_content(context.content, context)
             else:
                 logger.warning("[WX] unknown context type: {}".format(context.type))
                 return
