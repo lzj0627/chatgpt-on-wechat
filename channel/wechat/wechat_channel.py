@@ -24,6 +24,7 @@ from common.time_check import time_checker
 from config import conf, get_appdata_dir
 from lib import itchat
 from lib.itchat.content import *
+from PIL import Image
 
 
 @itchat.msg_register([TEXT, VOICE, VIDEO, PICTURE, NOTE, ATTACHMENT, SHARING])
@@ -271,6 +272,13 @@ class WechatChannel(ChatChannel):
             image_storage.seek(0)
             itchat.send_image(image_storage, toUserName=receiver)
             itchat.send(text_content, toUserName=receiver)
+            
+    def convert_image_to_png(self, image_content):
+        initial_image = Image.open(image_content)
+        output = io.BytesIO()
+        initial_image.save(output, format='PNG')
+        output.seek(0)
+        return output
 
 def _send_login_success():
     try:

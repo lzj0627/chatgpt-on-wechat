@@ -26,6 +26,7 @@ plugins/**/
 !plugins/Apilot
 !plugins/Apilot/**/
 !plugins/vision
+!plugins/midjourney
 !plugins/banwords
 !plugins/banwords/**/
 plugins/banwords/__pycache__
