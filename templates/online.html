@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>微信机器人在线状态</title>
+  <script src="https://cdn.bootcdn.net/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+<script>
+$(document).ready(function(){
+    setInterval(function(){
+      $.ajax({
+        url: "http://{{ backend }}:10000/status", 
+        type: "GET", 
+        dataType: "json", 
+        success: function(response) {
+            if(response.alive){
+              location.reload();
+            }else {
+              console.log('还未登录');
+        }
+      },
+      error: function() {
+        console.error("错误");
+       }
+      }
+     );
+    }, 5000);
+});
+</script>
+</head>
+<body>
+  <h1 style="text-align: center">扫码登录</h1>
+  <div style="text-align: center;">
+    <img src="{{ img_url }}" alt="二维码">
+  </div>
+</body>
+</html>

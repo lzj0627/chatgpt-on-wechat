@@ -56,7 +56,7 @@ class Midjourney(Plugin):
         result = None
         try:
             if content.startswith("/mj "):
-                result = self.handle_imagine(content[9:], state)
+                result = self.handle_imagine(content[4:], state)
             elif content.startswith("/up "):
                 arr = content[4:].split()
                 try:
