@@ -233,7 +233,7 @@ class Midjourney(Plugin):
 
     def get_buttons(self, task):
         res = 'Tips \n🔄:重新生成 U:放大 V:微调重新生成\n'
-        res += '序号 - 动作'
+        res += '序号 - 动作\n'
         index = 1
         for button in task['buttons']:
             name = button['emoji'] + button['label']

@@ -65,20 +65,6 @@ class ChatGPTBot(Bot, OpenAIImage):
             elif query == "#更新配置":
                 load_config()
                 reply = Reply(ReplyType.INFO, "配置已更新")
-            # elif query == "#开启联网":
-            elif query == "#开启工具":
-                conf()['enable_tools'] = True
-                self.sessions.clear_session(session_id)
-                self.tools = Tools()
-                # self.ddg_search = DDGSearch(conf().get('ddg_search_api'))
-                reply = Reply(ReplyType.INFO, "已开启工具")
-            # elif query == "#关闭联网":
-            elif query == "#关闭工具":
-                conf()['enable_tools'] = False
-                self.sessions.clear_session(session_id)
-                if hasattr(self, 'tools'):
-                    delattr(self, 'tools')
-                reply = Reply(ReplyType.INFO, "已关闭工具")
             if reply:
                 return reply
             session = self.sessions.session_query(query, session_id)

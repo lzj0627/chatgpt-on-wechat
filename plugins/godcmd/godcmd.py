@@ -138,11 +138,11 @@ ADMIN_COMMANDS = {
         "desc": "开启机器调试日志",
     },
     "enable_tools": {
-        "alias": ["enable_network", "开启工具"],
+        "alias": ["enable_tools", "开启工具"],
         "desc": "开启工具"
     },
     "disable_tools": {
-        "alias": ["disable_network", "关闭工具"],
+        "alias": ["disable_tools", "关闭工具"],
         "desc": "关闭工具"
     }
 }
@@ -441,13 +441,13 @@ class Godcmd(Plugin):
                             bot.sessions.clear_session(session_id)
                             # bot.ddg_search = DDGSearch(conf().get('ddg_search_api'))
                             bot.tools = Tools()
-                            reply = Reply(ReplyType.INFO, "已开启工具")
+                            ok, result = True, "已开启工具"
                         elif cmd == "disable_tools":
                             conf()['enable_tools'] = False
                             bot.sessions.clear_session(session_id)
                             if hasattr(bot, 'tools'):
                                 delattr(bot, 'tools')
-                            reply = Reply(ReplyType.INFO, "已关闭工具")
+                            ok, result = True, "已关闭工具"
                         logger.debug("[Godcmd] admin command: %s by %s" % (cmd, user))
                 else:
                     ok, result = False, "需要管理员权限才能执行该指令"

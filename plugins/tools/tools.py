@@ -3,6 +3,7 @@ import requests
 import openai
 import datetime
 from config import conf, load_config
+from common.log import logger
 
 
 tool_list = [
@@ -126,8 +127,8 @@ class Tools:
         response = requests.get(self.ddg_base, params=params)
         ddg_response = response.json()
         if ddg_response := response.json():
-            return json.dumps(ddg_response)
-        print('ddg搜索没有返回结果')
+            return json.dumps(ddg_response.get('results'))
+        logger.info("[Tools] ddg搜索没有返回结果")
         return '抱歉，这个问题由于某种原因，我无法提供搜索结果！'
     
     def get_time(self, question):
@@ -183,7 +184,7 @@ class Tools:
         except Exception as e:
             return '遇到点问题，暂时无法回答'
 
-    def run_conversation(self, api_key, messages, create_img=False, **args):
+    def run_conversation(self, api_key, messages, **args):
         if api_key:
             openai.api_key = api_key
         if args:
@@ -197,6 +198,7 @@ class Tools:
         response_message = response["choices"][0]["message"]
 
         if not response_message.get("tool_calls"):
+            logger.info("[Tools] 无需调用Tools")
             return response
         response_message = json.loads(json.dumps(response_message))
         messages.append(response_message)
@@ -205,10 +207,12 @@ class Tools:
             call_id = tool_info['id']
             func_obj = tool_info["function"]
             func_name = func_obj["name"]
-            print(f'调用Tools => {func_name}')
+            logger.info("[Tools] 开始调用 => {}".format(func_name))
             function_to_call = self.available_functions[func_name]
             function_args = json.loads(func_obj["arguments"])
+            logger.info("[Tools] 开始调用 => {} 使用参数 {}".format(func_name, function_args))
             function_response = function_to_call(**function_args)
+            logger.info("[Tools] 结束调用 => {}".format(func_name))
             messages.append(
                 {
                     "tool_call_id": call_id,
@@ -225,6 +229,7 @@ class Tools:
         second_response = openai.ChatCompletion.create(
             messages=messages,
             tools=tool_list,
+            tool_choice="auto",
             **args
         )
         if img_url:
