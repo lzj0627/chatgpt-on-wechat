@@ -4,6 +4,8 @@ import openai
 import datetime
 from config import conf, load_config
 from common.log import logger
+from concurrent.futures.thread import ThreadPoolExecutor
+import concurrent
 
 
 tool_list = [
@@ -18,7 +20,7 @@ tool_list = [
                         "type": "string",
                         "description": "需要借助于互联网搜索的问题。注意，必须给出要搜索的问题，无论这个问题是否合法。如：牢大是什么梗？",
                     },
-                    "max_results": {"type": "integer", "description": "返回搜索的最大条数"}
+                    "max_results": {"type": "integer", "description": "返回搜索的最大条数,建议给2"}
                 },
                 "required": ["question"],
             },
@@ -92,6 +94,7 @@ tool_list = [
 
 class Tools:
     ddg_base = conf().get('ddg_search_api')
+    jina_reader_base = "https://r.jina.ai"
     
     
     def __init__(self) -> None:
@@ -115,8 +118,28 @@ class Tools:
                 "draw_image": self.draw_image,
                 "answer_to_img": self.answer_to_img,
             }
+        
+    def summary_by_jina(self, url):
+        try:
+            response = requests.get(f'{self.jina_reader_base}/{url}', timeout=60)
+            return response.text
+        except Exception:
+            return ''
+
+    def jina_reader(self, data):
+        """使用jina reader总结网页内容"""
+        max_words = 8000
+        result_text = ''
+        with ThreadPoolExecutor(5, thread_name_prefix='jina') as executor:
+            futures = []
+            for obj in data:
+                res = executor.submit(self.summary_by_jina, obj.get('href'))
+                futures.append(res)
+            for future in concurrent.futures.as_completed(futures):
+                result_text += future.result()
+        return result_text[:max_words]
     
-    def get_ddg_search(self, question, max_results=4):
+    def get_ddg_search(self, question, max_results=2):
         """接入DDG进行联网检索"""
         if not conf().get('ddg_search_api'):
             raise DDGSearchAPIError('没有配置DDG API')
@@ -127,9 +150,10 @@ class Tools:
         response = requests.get(self.ddg_base, params=params)
         ddg_response = response.json()
         if ddg_response := response.json():
-            return json.dumps(ddg_response.get('results'))
+            # 利用jina reader总结网页内容
+            return self.jina_reader(ddg_response.get('results'))
         logger.info("[Tools] ddg搜索没有返回结果")
-        return '抱歉，这个问题由于某种原因，我无法提供搜索结果！'
+        return ''
     
     def get_time(self, question):
         """获取当前时间"""
@@ -177,7 +201,7 @@ class Tools:
             }
         ]
         new_args = self.args.copy()
-        new_args['model'] = 'gpt-4-vision-preview'
+        new_args['model'] = 'gpt-4o'
         try:
             response = openai.ChatCompletion.create(messages=messages, **new_args)
             return response.choices[0]["message"]["content"]

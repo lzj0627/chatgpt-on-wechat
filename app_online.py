@@ -9,9 +9,10 @@ import threading
 from flask import Flask, render_template, jsonify, Response
 from lib import itchat
 from flask_cors import CORS
-import json
+import ipaddress
 
-
+load_config()
+RUN_PORT = conf().get('port', 10000)
 
 def start_channel(channel_name: str):
     channel = channel_factory.create_channel(channel_name)
@@ -40,8 +41,8 @@ def online():
         # load config
         load_config()
         threading.Thread(target=start_channel, args=('wx',)).start()
-        time.sleep(1)
-        # 已登录状态 项目手动重启 热重载有一点延迟 再判断一次是否登录
+        while not itchat.instance.uuid:
+            time.sleep(1)
         alive = itchat.instance.alive
         if alive:
             return render_template('online.html', img_url=None)
@@ -56,12 +57,10 @@ def status():
     data = {'alive': alive}
     return jsonify(data)
 
-@app.route('/user_info')
-def user_info():
+@app.route('/friends')
+def friends():
     friends = itchat.instance.get_friends(update=True)
-    with open('/home/chatgpt-on-wechat/tmp/friends.json', 'w') as f:
-        json.dump(friends, f)
-    return jsonify({'status': True})
+    return jsonify(friends)
 
 
 @app.route('/logout', methods=['POST'])
@@ -78,13 +77,17 @@ def online_js():
     alive = itchat.instance.alive
     backend = conf().get('backend', '')
     rp_backend = backend.replace('http://', '').replace('https://', '')
-    check_list = rp_backend.split('.')
-    is_ip = all(_.isdigit() for _ in check_list)
+    try:
+        ipaddress.IPv4Address(rp_backend)
+        is_ip = True
+    except Exception as e:
+        is_ip = False
+    backend_url = f'http://{backend}:{str(RUN_PORT)}' if is_ip else backend
     if alive:
         js_code = f"""
         function sendRequest() {{
             $.ajax({{
-                url: "{backend + ':10000' if is_ip else backend}/logout", 
+                url: "{backend_url}/logout", 
                 type: "POST", 
                 dataType: "json", 
                 success: function(response) {{
@@ -106,7 +109,7 @@ def online_js():
             $(document).ready(function(){{
             setInterval(function(){{
             $.ajax({{
-                url: "{backend + ':10000' if is_ip else backend}/status", 
+                url: "{backend_url}/status", 
                 type: "GET", 
                 dataType: "json", 
                 success: function(response) {{
@@ -121,12 +124,12 @@ def online_js():
             }}
             }}
             );
-            }}, 5000);
+            }}, 1000);
         }});
     '''
     return Response(js_code, mimetype='application/javascript')
 
 
 if __name__ == "__main__":
-    app.run('0.0.0.0', 10000)
+    app.run('0.0.0.0', RUN_PORT)
     
