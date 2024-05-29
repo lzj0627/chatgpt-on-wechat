@@ -84,6 +84,28 @@ class WechatMPChannel(ChatChannel):
                 reply_text = reply.content
                 logger.info("[wechatmp] text cached, receiver {}\n{}".format(receiver, reply_text))
                 self.cache_dict[receiver].append(("text", reply_text))
+            elif reply.type == ReplyType.IMAGE_AND_TEXT:
+                res_dict = reply.content
+                text_content = res_dict.get('content')
+                img_url = res_dict.get('img_url')
+                pic_res = requests.get(img_url, stream=True)
+                image_storage = io.BytesIO()
+                for block in pic_res.iter_content(1024):
+                    image_storage.write(block)
+                image_storage.seek(0)
+                image_type = imghdr.what(image_storage)
+                filename = receiver + "-" + str(context["msg"].msg_id) + "." + image_type
+                content_type = "image/" + image_type
+                try:
+                    response = self.client.material.add("image", (filename, image_storage, content_type))
+                    logger.debug("[wechatmp] upload image response: {}".format(response))
+                except WeChatClientException as e:
+                    logger.error("[wechatmp] upload image failed: {}".format(e))
+                    return
+                media_id = response["media_id"]
+                logger.info("[wechatmp] image uploaded, receiver {}, media_id {}".format(receiver, media_id))
+                self.cache_dict[receiver].append(("image", media_id))
+                self.cache_dict[receiver].append(("text", text_content))
             elif reply.type == ReplyType.VOICE:
                 voice_file_path = reply.content
                 duration, files = split_audio(voice_file_path, 60 * 1000)
@@ -151,6 +173,33 @@ class WechatMPChannel(ChatChannel):
                     if i != len(texts) - 1:
                         time.sleep(0.5)  # 休眠0.5秒，防止发送过快乱序
                 logger.info("[wechatmp] Do send text to {}: {}".format(receiver, reply_text))
+            elif reply.type == ReplyType.IMAGE_AND_TEXT:
+                res_dict = reply.content
+                text_content = res_dict.get('content')
+                img_url = res_dict.get('img_url')
+                pic_res = requests.get(img_url, stream=True)
+                image_storage = io.BytesIO()
+                for block in pic_res.iter_content(1024):
+                    image_storage.write(block)
+                image_storage.seek(0)
+                image_type = imghdr.what(image_storage)
+                filename = receiver + "-" + str(context["msg"].msg_id) + "." + image_type
+                content_type = "image/" + image_type
+                try:
+                    response = self.client.media.upload("image", (filename, image_storage, content_type))
+                    logger.debug("[wechatmp] upload image response: {}".format(response))
+                except WeChatClientException as e:
+                    logger.error("[wechatmp] upload image failed: {}".format(e))
+                    return
+                self.client.message.send_image(receiver, response["media_id"])
+                texts = split_string_by_utf8_length(text_content, MAX_UTF8_LEN)
+                if len(texts) > 1:
+                    logger.info("[wechatmp] text too long, split into {} parts".format(len(texts)))
+                for i, text in enumerate(texts):
+                    self.client.message.send_text(receiver, text)
+                    if i != len(texts) - 1:
+                        time.sleep(0.5)  # 休眠0.5秒，防止发送过快乱序
+                logger.info("[wechatmp] Do send text to {}: {}".format(receiver, text_content))
             elif reply.type == ReplyType.VOICE:
                 try:
                     file_path = reply.content

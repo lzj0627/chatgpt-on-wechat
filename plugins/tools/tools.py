@@ -6,6 +6,7 @@ from config import conf, load_config
 from common.log import logger
 from concurrent.futures.thread import ThreadPoolExecutor
 import concurrent
+import html
 
 
 tool_list = [
@@ -88,6 +89,21 @@ tool_list = [
                 },
                 "required": ["q", "img_url"],
             },
+        }},
+        {"type": "function",
+            "function": {
+            "name": "summary_by_url",
+            "description": "总结网页内容",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "网页地址",
+                    }
+                },
+                "required": ["url"],
+            },
         }}
     ]
 
@@ -117,10 +133,12 @@ class Tools:
                 "get_weather": self.get_weather,
                 "draw_image": self.draw_image,
                 "answer_to_img": self.answer_to_img,
+                "summary_by_url": self.summary_by_jina,
             }
         
     def summary_by_jina(self, url):
         try:
+            url = html.unescape(url)
             response = requests.get(f'{self.jina_reader_base}/{url}', timeout=60)
             return response.text
         except Exception:
@@ -157,8 +175,9 @@ class Tools:
     
     def get_time(self, question):
         """获取当前时间"""
+        week_day_choice = ['星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
         date = datetime.datetime.now()
-        return date.strftime("%Y/%m/%d-%H:%M")
+        return f'{week_day_choice[date.weekday()]} {date.strftime("%Y/%m/%d-%H:%M")}'
     
     def get_weather(self, city):
         """获取天气"""
@@ -250,6 +269,10 @@ class Tools:
                 image_text_reply = {"role":"assistant","content":"生成的图片已经发送，不需要将图片链接也回复出去"}
                 if image_text_reply not in messages:
                     messages.append(image_text_reply)
+            elif func_name == 'summary_by_url':
+                args['model'] = 'gpt-3.5-turbo-0125'
+                summary_prompt = {"role":"assistant","content":"对下一次的回答进行总结，总结输出包括以下三个部分：\n📖 一句话总结\n🔑 关键要点,用数字序号列出3-5个文章的核心内容\n🏷 标签: #xx #xx\n请使用emoji让你的表达更生动。"}
+                messages.append(summary_prompt)
         second_response = openai.ChatCompletion.create(
             messages=messages,
             tools=tool_list,

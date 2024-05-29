@@ -104,64 +104,6 @@ class ChatGPTBot(Bot, OpenAIImage):
                 reply = Reply(ReplyType.ERROR, reply_content["content"])
                 logger.debug("[CHATGPT] reply {} used 0 tokens.".format(reply_content))
             return reply
-        elif context.type == ContextType.IMAGE and model == 'gpt-4-vision-preview':
-            '''
-            {
-            "type": "text",
-            "text": "What’s in this image? Please answer me in Chinese."
-            },
-            {
-            "type": "image_url",
-            "image_url": {
-                "url": f"data:image/jpeg;base64,{base64_image}"
-            }
-            }
-            '''
-            # reply = Reply(ReplyType.ERROR, "Bot不支持处理{}类型的消息".format(context.type))
-            session_id = context["session_id"]
-            context.get("msg").prepare()
-            file_path = context.content
-            image_storage = open(file_path, 'rb')
-            image_storage.seek(0)
-            base64_image = base64.b64encode(image_storage.read()).decode('utf-8')
-            query = [
-                {
-                "type": "text",
-                "text": "What’s in this image? Please answer me in Chinese."
-                },
-                {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}"
-                }
-                }
-            ]
-            session = self.sessions.session_query(query, session_id)
-            logger.debug("[CHATGPT] session query={}".format(session.messages))
-            
-            api_key = context.get("openai_api_key")
-            new_args = None
-            new_args = self.args.copy()
-            new_args["model"] = model
-            new_args["max_tokens"] = 4096
-            reply_content = self.reply_text(session, api_key, args=new_args)
-            logger.debug(
-                "[CHATGPT] new_query={}, session_id={}, reply_cont={}, completion_tokens={}".format(
-                    session.messages,
-                    session_id,
-                    reply_content["content"],
-                    reply_content["completion_tokens"],
-                )
-            )
-            if reply_content["completion_tokens"] == 0 and len(reply_content["content"]) > 0:
-                reply = Reply(ReplyType.ERROR, reply_content["content"])
-            elif reply_content["completion_tokens"] > 0:
-                self.sessions.session_reply(reply_content["content"], session_id, reply_content["total_tokens"])
-                reply = Reply(ReplyType.TEXT, reply_content["content"])
-            else:
-                reply = Reply(ReplyType.ERROR, reply_content["content"])
-                logger.debug("[CHATGPT] reply {} used 0 tokens.".format(reply_content))
-            return reply
         elif context.type == ContextType.IMAGE_CREATE:
             ok, retstring = self.create_img(query, 0)
             reply = None

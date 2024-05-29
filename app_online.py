@@ -42,10 +42,8 @@ def online():
         load_config()
         threading.Thread(target=start_channel, args=('wx',)).start()
         while not itchat.instance.uuid:
-            time.sleep(1)
-        alive = itchat.instance.alive
-        if alive:
-            return render_template('online.html', img_url=None)
+            if itchat.instance.alive:
+                return render_template('online.html', img_url=None)
         url = f"https://login.weixin.qq.com/l/{itchat.instance.uuid}"
         img_url = f"https://api.pwmqr.com/qrcode/create/?url={url}"
         return render_template('online.html', img_url=img_url)
@@ -92,40 +90,43 @@ def online_js():
                 dataType: "json", 
                 success: function(response) {{
                     if(response.code == 200){{
-                    location.reload();
-                    }}else {{
-                    alert('未知错误');
+                        location.reload();
+                        }}
+                    else {{
+                        alert('未知错误');
+                    }}
+                }},
+                error: function() {{
+                    console.log("错误");
                 }}
-            }},
-            error: function() {{
-                console.log("错误");
-            }}
-            }}
-            );
+            }});
         }}
         """
     else:
         js_code = f'''
             $(document).ready(function(){{
-            setInterval(function(){{
-            $.ajax({{
-                url: "{backend_url}/status", 
-                type: "GET", 
-                dataType: "json", 
-                success: function(response) {{
-                    if(response.alive){{
-                    location.reload();
-                    }}else {{
-                    console.log('还未登录');
-                }}
-            }},
-            error: function() {{
-                console.log("错误");
-            }}
-            }}
-            );
-            }}, 1000);
-        }});
+                setInterval(function(){{
+                    $.ajax({{
+                        url: "{backend_url}/status", 
+                        type: "GET", 
+                        dataType: "json", 
+                        success: function(response) {{
+                            if(response.alive){{
+                                location.reload();
+                                }}
+                            else {{
+                                console.log('还未登录');
+                            }}
+                        }},
+                        error: function() {{
+                            console.log("错误");
+                        }}
+                    }});
+                }}, 1000);
+            }});
+            setTimeout(function(){{
+                location.reload();
+                }}, 300000)
     '''
     return Response(js_code, mimetype='application/javascript')
 
