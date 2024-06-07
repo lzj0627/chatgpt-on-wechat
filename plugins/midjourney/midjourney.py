@@ -5,7 +5,7 @@ import plugins
 from bridge.context import ContextType, Context
 from bridge.reply import Reply, ReplyType
 from channel.chat_message import ChatMessage
-from channel.wechat.wechat_channel import WechatChannel
+from channel.channel_factory import create_channel
 
 from common.log import logger
 from common.expired_dict import ExpiredDict
@@ -34,7 +34,7 @@ class Midjourney(Plugin):
         self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
         self.proxy_server = conf().get("proxy_server")
         self.proxy_api_secret = conf().get("proxy_api_secret")
-        self.channel = WechatChannel()
+        self.channel = create_channel(conf().get('channel_type', 'wx'))
         self.task_id_dict = ExpiredDict(60 * 60)
         self.cmd_dict = ExpiredDict(60 * 60)
         scheduler = BlockingScheduler()

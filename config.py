@@ -162,6 +162,8 @@ available_setting = {
     "dingtalk_client_id": "",  # 钉钉机器人Client ID 
     "dingtalk_client_secret": "",  # 钉钉机器人Client Secret
     "dingtalk_card_enabled": False,
+    "dingtalk_card_template_id": "",
+    "dingtalk_video_card_template_id": "",
     
     # chatgpt指令自定义触发词
     "clear_memory_commands": ["#清除记忆"],  # 重置会话指令，必须以#开头

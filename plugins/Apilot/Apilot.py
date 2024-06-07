@@ -219,7 +219,7 @@ class Apilot(Plugin):
             payload = "format=json"
             headers = {'Content-Type': "application/x-www-form-urlencoded"}
             try:
-                morning_news_info = self.make_request(url, method="POST", headers=headers, data=payload)
+                morning_news_info = self.make_request(url, method="GET", headers=headers, data=payload)
                 if isinstance(morning_news_info, dict) and morning_news_info['success']:
                     if morning_news_text_enabled:
                         # 提取并格式化新闻
@@ -264,7 +264,7 @@ class Apilot(Plugin):
         headers = {'Content-Type': "application/x-www-form-urlencoded"}
 
         try:
-            moyu_calendar_info = self.make_request(url, method="POST", headers=headers, data=payload)
+            moyu_calendar_info = self.make_request(url, method="GET", headers=headers, data=payload)
             # 验证请求是否成功
             if isinstance(moyu_calendar_info, dict) and moyu_calendar_info['success']:
                 return moyu_calendar_info['url']

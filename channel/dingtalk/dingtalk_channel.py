@@ -25,6 +25,7 @@ from common.log import logger
 from common.singleton import singleton
 from common.time_check import time_checker
 from config import conf
+import cv2
 
 
 class CustomAICardReplier(CardReplier):
@@ -85,6 +86,8 @@ def _check(func):
 class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
     dingtalk_client_id = conf().get('dingtalk_client_id')
     dingtalk_client_secret = conf().get('dingtalk_client_secret')
+    dingtalk_message_card_template_id = conf().get('dingtalk_card_template_id')
+    dingtalk_video_card_template_id = conf().get('dingtalk_video_card_template_id')
 
     def setup_logger(self):
         logger = logging.getLogger()
@@ -181,13 +184,39 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
             logger.info("[Dingtalk] sendMsg={}, receiver={}".format(reply, receiver))
             def reply_with_text():
                 self.reply_text(reply.content, incoming_message)
+            def reply_with_ai_card():
+                self.generate_ai_card(reply, incoming_message)
+            def reply_with_video_card():
+                self.generate_video_card(reply, incoming_message)
             def reply_with_at_text():
                 self.reply_text("📢 您有一条新的消息，请查看。", incoming_message)
             def reply_with_ai_markdown():
                 button_list, markdown_content = self.generate_button_markdown_content(context, reply)
                 self.reply_ai_markdown_button(incoming_message, markdown_content, button_list, "", "📌 内容由AI生成", "",[incoming_message.sender_staff_id])
 
-            if reply.type in [ReplyType.IMAGE_URL, ReplyType.IMAGE, ReplyType.TEXT]:
+            if reply.type == ReplyType.TEXT:
+                if isgroup:
+                    reply_with_ai_card()
+                    reply_with_at_text()
+                else:
+                    reply_with_ai_card()
+            elif reply.type == ReplyType.VIDEO_URL:
+                if isgroup:
+                    reply_with_video_card()
+                    reply_with_at_text()
+                else:
+                    reply_with_video_card()
+            elif reply.type in [ReplyType.IMAGE_URL, ReplyType.IMAGE]:
+                if isgroup:
+                    reply_with_ai_markdown()
+                    reply_with_at_text()
+                else:
+                    reply_with_ai_markdown()
+            elif reply.type == ReplyType.IMAGE_AND_TEXT:
+                content = reply.content.get('content')
+                context.__setitem__('image_url', reply.content.get('img_url'))
+                context.__setitem__('promptEn', content)
+                reply.content = content
                 if isgroup:
                     reply_with_ai_markdown()
                     reply_with_at_text()
@@ -205,21 +234,63 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
         promptEn = context.kwargs.get("promptEn")
         reply_text = reply.content
         button_list = []
-        markdown_content = f"""
-{reply.content}
-                                """
+        markdown_content = reply_text
         if image_url is not None and promptEn is not None:
             button_list = [
                 {"text": "查看原图", "url": image_url, "iosUrl": image_url, "color": "blue"}
             ]
-            markdown_content = f"""
-{promptEn}
-
-!["图片"]({image_url})
-
-{reply_text}
-
-                                """
+            markdown_content = f'{reply_text or promptEn}\n\n!["图片"]({image_url}) '
         logger.debug(f"[Dingtalk] generate_button_markdown_content, button_list={button_list} , markdown_content={markdown_content}")
 
         return button_list, markdown_content
+    
+    def generate_ai_card(self, reply, incoming_message):
+        """
+        钉钉开发者后台创建AI卡片模板
+        https://open-dev.dingtalk.com/?spm=ding_open_doc.document.0.0.33a34fc0InhPt7#/
+        """
+        content_key = "content"
+        card_data = {content_key: ""}
+        card_instance = dingtalk_stream.AICardReplier(
+            self.dingtalk_client, incoming_message
+        )
+        
+        card_instance_id = card_instance.create_and_send_card(
+            self.dingtalk_message_card_template_id, card_data, callback_type="STREAM"
+        )
+        card_instance.streaming(
+                card_instance_id,
+                content_key=content_key,
+                content_value=reply.content,
+                append=False,
+                finished=True,
+                failed=False,
+            )
+        
+    def generate_video_card(self, reply, incoming_message):
+        card_data = {'video': reply.content, 'content': ''}
+        card_instance = dingtalk_stream.AICardReplier(
+            self.dingtalk_client, incoming_message
+        )
+        
+        card_instance_id = card_instance.create_and_send_card(
+            self.dingtalk_video_card_template_id, card_data, callback_type="STREAM"
+        )
+        card_instance.streaming(
+                card_instance_id,
+                content_key='content',
+                content_value=incoming_message.text.content,
+                append=True,
+                finished=True,
+                failed=False,
+            )
+
+def getVideoPng(_videoPath, _pngPath):
+    vidcap = cv2.VideoCapture(_videoPath)
+    for _ in range(1, 30):
+         success, image = vidcap.read()
+    imag = cv2.imwrite(_pngPath, image)
+    if imag:
+        return True
+    else:
+        return False
