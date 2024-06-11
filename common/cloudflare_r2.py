@@ -11,10 +11,8 @@ class CloudFlareR2:
         cf_id = conf().get("cloud_flare_id")
         bucket_name = conf().get("r2_bucket_name")
         cf_api_key = conf().get("cf_api_key")
-        if conf().get('r2_base_url', '').endswith('/'):
-            self.R2_BASE_URL = conf().get('r2_base_url')
-        else:
-            self.R2_BASE_URL = conf().get('r2_base_url') + '/'
+        if conf().get('r2_base_url'):
+            self.R2_BASE_URL = f"{conf().get('r2_base_url').strip('/')}/"
         if cf_id:
             self.ACCOUNT_ID = cf_id
         # 你的R2存储桶名称

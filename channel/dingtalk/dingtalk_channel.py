@@ -26,6 +26,10 @@ from common.singleton import singleton
 from common.time_check import time_checker
 from config import conf
 import cv2
+import os
+import datetime
+from common.tmp_dir import TmpDir
+from common.cloudflare_r2 import CloudFlareR2
 
 
 class CustomAICardReplier(CardReplier):
@@ -110,6 +114,7 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
         conf()["group_name_white_list"] = ["ALL_GROUP"]
         # 单聊无需前缀
         conf()["single_chat_prefix"] = [""]
+        self.r2 = CloudFlareR2()
 
     def startup(self):
         credential = dingtalk_stream.Credential(self.dingtalk_client_id, self.dingtalk_client_secret)
@@ -268,7 +273,11 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
             )
         
     def generate_video_card(self, reply, incoming_message):
-        card_data = {'video': reply.content, 'content': ''}
+        cover = os.path.join(TmpDir().path(), f"{datetime.datetime.now().strftime('%Y%m%d_%H%M_%f')}.png")
+        card_data = {'video': reply.content, 'content': '', 'video_cover': ''}
+        if getVideoPng(reply.content, cover) and self.r2.is_valid:
+            video_cover = self.r2.to_r2(cover)
+            card_data['video_cover'] = video_cover
         card_instance = dingtalk_stream.AICardReplier(
             self.dingtalk_client, incoming_message
         )
@@ -288,9 +297,5 @@ class DingTalkChanel(ChatChannel, dingtalk_stream.ChatbotHandler):
 def getVideoPng(_videoPath, _pngPath):
     vidcap = cv2.VideoCapture(_videoPath)
     for _ in range(1, 30):
-         success, image = vidcap.read()
-    imag = cv2.imwrite(_pngPath, image)
-    if imag:
-        return True
-    else:
-        return False
+         _, image = vidcap.read()
+    return cv2.imwrite(_pngPath, image)
