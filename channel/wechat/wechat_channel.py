@@ -120,14 +120,14 @@ class WechatChannel(ChatChannel):
         try:
             time.sleep(3)
             logger.error("""[WechatChannel] 当前channel暂不可用，目前支持的channel有:
-    1. terminal: 终端
-    2. wechatmp: 个人公众号
-    3. wechatmp_service: 企业公众号
-    4. wechatcom_app: 企微自建应用
-    5. dingtalk: 钉钉
-    6. feishu: 飞书
-    7. web: 网页
-可修改 config.json 配置文件的 channel_type 字段进行切换""")
+                1. terminal: 终端
+                2. wechatmp: 个人公众号
+                3. wechatmp_service: 企业公众号
+                4. wechatcom_app: 企微自建应用
+                5. dingtalk: 钉钉
+                6. feishu: 飞书
+                7. web: 网页
+            可修改 config.json 配置文件的 channel_type 字段进行切换""")
             # itchat.instance.receivingRetryCount = 600  # 修改断线超时时间
             # # login by scan QRCode
             # hotReload = conf().get("hot_reload", False)
